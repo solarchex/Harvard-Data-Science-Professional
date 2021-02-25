@@ -1,0 +1,305 @@
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+%
+\documentclass[
+]{article}
+\usepackage{lmodern}
+\usepackage{amsmath}
+\usepackage{ifxetex,ifluatex}
+\ifnum 0\ifxetex 1\fi\ifluatex 1\fi=0 % if pdftex
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provide euro and other symbols
+  \usepackage{amssymb}
+\else % if luatex or xetex
+  \usepackage{unicode-math}
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\makeatletter
+\@ifundefined{KOMAClassName}{% if non-KOMA class
+  \IfFileExists{parskip.sty}{%
+    \usepackage{parskip}
+  }{% else
+    \setlength{\parindent}{0pt}
+    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
+}{% if KOMA class
+  \KOMAoptions{parskip=half}}
+\makeatother
+\usepackage{xcolor}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
+\IfFileExists{bookmark.sty}{\usepackage{bookmark}}{\usepackage{hyperref}}
+\hypersetup{
+  pdftitle={Movie Recommendation System - Capstone Project Report},
+  pdfauthor={Rashmy Patwari},
+  hidelinks,
+  pdfcreator={LaTeX via pandoc}}
+\urlstyle{same} % disable monospaced font for URLs
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\makeatletter
+\def\maxwidth{\ifdim\Gin@nat@width>\linewidth\linewidth\else\Gin@nat@width\fi}
+\def\maxheight{\ifdim\Gin@nat@height>\textheight\textheight\else\Gin@nat@height\fi}
+\makeatother
+% Scale images if necessary, so that they will not overflow the page
+% margins by default, and it is still possible to overwrite the defaults
+% using explicit options in \includegraphics[width, height, ...]{}
+\setkeys{Gin}{width=\maxwidth,height=\maxheight,keepaspectratio}
+% Set default figure placement to htbp
+\makeatletter
+\def\fps@figure{htbp}
+\makeatother
+\setlength{\emergencystretch}{3em} % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\setcounter{secnumdepth}{5}
+\ifluatex
+  \usepackage{selnolig}  % disable illegal ligatures
+\fi
+
+\title{Movie Recommendation System - Capstone Project Report}
+\author{Rashmy Patwari}
+\date{23 February 2021}
+
+\begin{document}
+\maketitle
+
+{
+\setcounter{tocdepth}{2}
+\tableofcontents
+}
+\newpage
+
+\hypertarget{project-summary}{%
+\section{Project Summary}\label{project-summary}}
+
+The goal of this project is to create a movie recommendation system
+similar to the ones used by NETFLIX. A smaller version of the MovieLens
+dataset is used with 10 million ratings. The dataset is divided into 2
+sets, \textbf{EDX}, for training and \textbf{Validation} for evaluation.
+
+Both the datasets have the following features.
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{userId} \texttt{\textless{}integer\textgreater{}} that
+  contains the unique identification number for each user.
+\item
+  \textbf{movieId} \texttt{\textless{}numeric\textgreater{}} that
+  contains the unique identification number for each movie.
+\item
+  \textbf{rating} \texttt{\textless{}numeric\textgreater{}} that
+  contains the rating of one movie by one user. Ratings are made on a
+  5-Star scale with half-star increments.
+\item
+  \textbf{timestamp} \texttt{\textless{}integer\textgreater{}} that
+  contains the timestamp for one specific rating provided by one user.
+\item
+  \textbf{title} \texttt{\textless{}character\textgreater{}} that
+  contains the title of each movie including the year of the release.
+\item
+  \textbf{genres} \texttt{\textless{}character\textgreater{}} that
+  contains a list of pipe-separated of genre of each movie. There are
+  about 20 Genres.
+\end{itemize}
+
+The objective of the project is to choose a recommendation model based
+on RMSE lower than \textbf{0.87750}
+
+\[\mbox{RMSE} = \sqrt{\frac{1}{n}\sum_{t=1}^{n}e_t^2}\]
+
+\hypertarget{initial-data-exploration}{%
+\section{Initial Data Exploration}\label{initial-data-exploration}}
+
+\textbf{edx dataset}
+
+The \texttt{edx} dataset contains approximately 9 Millions of rows with
+70.000 different users and 11.000 movies with rating score between 0.5
+and 5. There is no missing values (0 or NA).
+
+\begin{verbatim}
+##   Users Movies
+## 1 69878  10677
+\end{verbatim}
+
+\textbf{Missing Values}
+
+\begin{verbatim}
+##    userId   movieId    rating timestamp     title    genres 
+##         0         0         0         0         0         0
+\end{verbatim}
+
+\textbf{First 6 Rows of edx dataset}
+
+\begin{verbatim}
+##    userId movieId rating timestamp                         title
+## 1:      1     122      5 838985046              Boomerang (1992)
+## 2:      1     185      5 838983525               Net, The (1995)
+## 3:      1     292      5 838983421               Outbreak (1995)
+## 4:      1     316      5 838983392               Stargate (1994)
+## 5:      1     329      5 838983392 Star Trek: Generations (1994)
+## 6:      1     355      5 838984474       Flintstones, The (1994)
+##                           genres
+## 1:                Comedy|Romance
+## 2:         Action|Crime|Thriller
+## 3:  Action|Drama|Sci-Fi|Thriller
+## 4:       Action|Adventure|Sci-Fi
+## 5: Action|Adventure|Drama|Sci-Fi
+## 6:       Children|Comedy|Fantasy
+\end{verbatim}
+
+\newpage
+
+\hypertarget{dataset-pre-processing-and-feature-engineering}{%
+\section{Dataset Pre-Processing and Feature
+Engineering}\label{dataset-pre-processing-and-feature-engineering}}
+
+Initial data exploration reveals that the Genres are Pipe (\textbar)
+separated values. For estimation precision, it is required to separate
+them.
+
+\hypertarget{build-evaluate-and-analyze-models}{%
+\section{Build, Evaluate and Analyze
+Models}\label{build-evaluate-and-analyze-models}}
+
+\hypertarget{model-1---naive-mean-baseline-model}{%
+\subsection{Model 1 - Naive Mean-Baseline
+model}\label{model-1---naive-mean-baseline-model}}
+
+The formula for computing this is
+
+\[Y_{u,i} = \hat{\mu} + \varepsilon_{u,i}\]
+
+With \(\hat{\mu}\) is the mean and \(\varepsilon_{i,u}\) is the
+independent errors sampled from the same distribution centered at 0.
+
+The RMSE on the \textbf{Validation} data is \texttt{1.0525579}. This is
+way off from the target RMSE of \textless{} 0.87. This clearly states
+that the model is not optimal.
+
+\hypertarget{model-2---considering-the-bias-that-some-movies-are-rated-higher-than-others.}{%
+\subsection{Model 2 - Considering the bias that, some movies are rated
+higher than
+others.}\label{model-2---considering-the-bias-that-some-movies-are-rated-higher-than-others.}}
+
+The formula used is:
+
+\[Y_{u,i} = \hat{\mu} + b_i + \epsilon_{u,i}\]
+
+With \(\hat{\mu}\) is the mean and \(\varepsilon_{i,u}\) is the
+independent errors sampled from the same distribution centered at 0. The
+\(b_i\) is a measure for the popularity of movie \(i\), i.e.~the bias of
+movie \(i\).
+
+The RMSE on the \texttt{validation} dataset is \textbf{0.9410700}. It
+better than the Naive Mean-Baseline Model, but it is also very far from
+the target RMSE (below 0.87) and that indicates poor performance for the
+model.
+
+\hypertarget{model-3---considering-the-user-effects.}{%
+\subsection{Model 3 - Considering the User
+Effects.}\label{model-3---considering-the-user-effects.}}
+
+The second Non-Naive Model consider that the users have different tastes
+and rate differently.
+
+The formula used is:
+
+\[Y_{u,i} = \hat{\mu} + b_i + b_u + \epsilon_{u,i}\]
+
+With \(\hat{\mu}\) is the mean and \(\varepsilon_{i,u}\) is the
+independent errors sampled from the same distribution centered at 0. The
+\(b_i\) is a measure for the popularity of movie \(i\), i.e.~the bias of
+movie \(i\). The \(b_u\) is a measure for the mildness of user \(u\),
+i.e.~the bias of user \(u\).
+
+The RMSE on the \texttt{validation} dataset is \textbf{0.8633660} and
+this is very good. We need to explore further with the Genres effect.
+
+\hypertarget{model-4---check-the-genre-effects}{%
+\subsection{Model 4 - Check the Genre
+effects}\label{model-4---check-the-genre-effects}}
+
+The formula used is:
+
+\[Y_{u,i} = \hat{\mu} + b_i + b_u + b_{u,g} + \epsilon_{u,i}\]
+
+With \(\hat{\mu}\) is the mean and \(\varepsilon_{i,u}\) is the
+independent errors sampled from the same distribution centered at 0. The
+\(b_i\) is a measure for the popularity of movie \(i\), i.e.~the bias of
+movie \(i\). The \(b_u\) is a measure for the mildness of user \(u\),
+i.e.~the bias of user \(u\). The \(b_{u,g}\) is a measure for how much a
+user \(u\) likes the genre \(g\).
+
+The RMSE on the \texttt{validation} dataset is \textbf{0.8632723} and
+this meets our target. Adding Genre did not significantly change much
+from the Movie+User model. Regularization can improve the performance
+just a little.
+
+The regularization method allows us to add a penalty \(\lambda\)
+(lambda) to penalizes movies with large estimates from a small sample
+size. In order to optimize \(b_i\), it necessary to use this equation:
+
+\[\frac{1}{N} \sum_{u,i} (y_{u,i} - \mu - b_{i})^{2} + \lambda \sum_{i} b_{i}^2\]
+
+reduced to this equation:
+
+\[\hat{b_{i}} (\lambda) = \frac{1}{\lambda + n_{i}} \sum_{u=1}^{n_{i}} (Y_{u,i} - \hat{\mu}) \]
+
+\hypertarget{model-5---regularized-movie-based-model.-regularized-to-eliminate-noisy-estimates}{%
+\subsection{Model 5 - Regularized Movie based model. Regularized to
+eliminate noisy
+estimates}\label{model-5---regularized-movie-based-model.-regularized-to-eliminate-noisy-estimates}}
+
+The RMSE on the \texttt{validation} dataset is \textbf{0.9410381} and it
+looks a definite improvement over just the Movie Based Model.
+
+\hypertarget{model-6---regularized-movie-user-based-model}{%
+\subsection{Model 6 - Regularized movie + user based
+model}\label{model-6---regularized-movie-user-based-model}}
+
+The RMSE on the \texttt{validation} dataset is \textbf{0.8627554} and it
+looks a definite improvement over just the Movie+User Based Model. We
+will try to improve it by including the Genre.
+
+\hypertarget{model-7---regularized-movieuser-and-genre.}{%
+\subsection{Model 7 - Regularized Movie,User and
+Genre.}\label{model-7---regularized-movieuser-and-genre.}}
+
+The RMSE on the \texttt{validation} dataset is \textbf{0.8627554} and
+this is the best of the models. The Regularized Movie+User+Genre Based
+Model improves just a little the result over the Non-Regularized Model,
+not a significant improvement.
+
+\hypertarget{results}{%
+\section{Results}\label{results}}
+
+\begin{verbatim}
+##                                      model      RMSE
+## 1                Naive Mean-Baseline Model 1.0525579
+## 2                        Movie-Based Model 0.9410700
+## 3                         User-Based Model 0.8633660
+## 4             Movie+User+Genre Based Model 0.8632723
+## 5            Regularized Movie-Based Model 0.9410381
+## 6       Regularized Movie+User Based Model 0.8628015
+## 7 Regularized Movie+User+Genre Based Model 0.8627121
+\end{verbatim}
+
+\hypertarget{conclusion}{%
+\section{Conclusion}\label{conclusion}}
+
+Analyzing the RMSEs of the above models, it is evident that
+\textbf{Movie Id} and \textbf{User Id} are better contributors than
+\textbf{Genre}. Having said that, the models indicate over training.
+Regularization helps in reducing the effect of variables and get the
+best meeting our target goal of \textless{} than \textbf{0.87}.
+
+\end{document}

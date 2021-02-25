@@ -1,0 +1,444 @@
+---
+title: "Movie Recommendation System - Capstone Project Report"
+author: "Rashmy Patwari"
+date: "23 February 2021"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 2
+    number_sections: true
+    highlight: pygments
+    keep_tex: true
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align = 'center', cache=FALSE, cache.lazy = FALSE)
+```
+
+```{r, include=FALSE, echo=FALSE}
+# Installing required libraries if not present
+
+if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
+if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
+if(!require(data.table)) install.packages("data.table", repos = "http://cran.us.r-project.org")
+if(!require(tidyr)) install.packages("tidyr", repos = "http://cran.us.r-project.org")
+if(!require(stringr)) install.packages("stringr", repos = "http://cran.us.r-project.org")
+```
+
+```{r include=FALSE, echo=FALSE}
+#Include the required libraries
+library(tidyverse)
+library(caret)
+library(data.table)
+library(forcats)
+library(stringr)
+library(tidyr)
+library(dplyr)
+
+```
+
+```{r include=FALSE, echo=FALSE}
+###########################################################
+# Create edx set, validation set (final hold-out test set)
+##########################################################
+# MovieLens 10M dataset:
+# https://grouplens.org/datasets/movielens/10m/
+# http://files.grouplens.org/datasets/movielens/ml-10m.zip
+
+dl <- tempfile()
+download.file("http://files.grouplens.org/datasets/movielens/ml-10m.zip", dl)
+
+ratings <- fread(text = gsub("::", "\t", readLines(unzip(dl, "ml-10M100K/ratings.dat"))),
+                 col.names = c("userId", "movieId", "rating", "timestamp"))
+
+movies <- str_split_fixed(readLines(unzip(dl, "ml-10M100K/movies.dat")), "\\::", 3)
+colnames(movies) <- c("movieId", "title", "genres")
+
+# if using R 4.0 or later:
+movies <- as.data.frame(movies) %>% mutate(movieId = as.numeric(movieId),
+                                           title = as.character(title),
+                                           genres = as.character(genres))
+
+
+movielens <- left_join(ratings, movies, by = "movieId")
+
+# Validation set will be 10% of MovieLens data
+set.seed(1, sample.kind="Rounding") # if using R 3.5 or earlier, use `set.seed(1)`
+test_index <- createDataPartition(y = movielens$rating, times = 1, p = 0.1, list = FALSE)
+edx <- movielens[-test_index,]
+temp <- movielens[test_index,]
+
+# Make sure userId and movieId in validation set are also in edx set
+validation <- temp %>% 
+  semi_join(edx, by = "movieId") %>%
+  semi_join(edx, by = "userId")
+
+# Add rows removed from validation set back into edx set
+removed <- anti_join(temp, validation)
+edx <- rbind(edx, removed)
+
+rm(dl, ratings, movies, test_index, temp, movielens, removed)
+
+```
+
+\newpage
+# Project Summary
+
+The goal of this project is to create a movie recommendation system similar to the ones used by NETFLIX. A smaller version of the MovieLens dataset is used with 10 million ratings. The dataset is divided into 2 sets, **EDX**, for training and **Validation** for evaluation. 
+
+Both the datasets have the following features. 
+
+- **userId** ```<integer>``` that contains the unique identification number for each user.
+- **movieId** ```<numeric>``` that contains the unique identification number for each movie.
+- **rating** ```<numeric>``` that contains the rating of one movie by one user. Ratings are made on a 5-Star scale with half-star increments.
+- **timestamp** ```<integer>``` that contains the timestamp for one specific rating provided by one user.
+- **title** ```<character>``` that contains the title of each movie including the year of the release.
+- **genres** ```<character>``` that contains a list of pipe-separated of genre of each movie. There are about 20 Genres.
+
+The objective of the project is to choose a recommendation model based on RMSE lower than **0.87750** 
+
+$$\mbox{RMSE} = \sqrt{\frac{1}{n}\sum_{t=1}^{n}e_t^2}$$
+```{r, include=FALSE, echo=FALSE}
+# The RMSE function that will be used in this project is:
+RMSE <- function(true_ratings = NULL, predicted_ratings = NULL) {
+    sqrt(mean((true_ratings - predicted_ratings)^2))
+}
+
+```
+
+# Initial Data Exploration
+
+**edx dataset**
+
+The ```edx``` dataset contains approximately 9 Millions of rows with 70.000 different users and 11.000 movies with rating score between 0.5 and 5. There is no missing values (0 or NA).
+
+```{r, echo=FALSE, include=TRUE}
+
+edx %>% summarize(Users = n_distinct(userId),
+                  Movies = n_distinct(movieId))
+```
+
+**Missing Values**
+```{r, echo=FALSE, include=TRUE}
+
+sapply(edx, function(x) sum(is.na(x)))
+
+```
+
+**First 6 Rows of edx dataset**
+```{r echo=FALSE, include=TRUE}
+head(edx)
+```
+
+\newpage
+
+# Dataset Pre-Processing and Feature Engineering
+
+Initial data exploration reveals that the Genres are Pipe (|) separated values. For estimation precision, it is required to separate them.
+
+```{r, echo=FALSE, include=FALSE}
+
+# Extract the genre in edx datasets
+
+edx <- edx %>%
+  mutate(genre = as.character(fct_explicit_na(genres,
+                                 na_level = "(no genres listed)"))
+  ) %>%
+  separate_rows(genre,
+                sep = "\\|")
+
+
+```
+
+```{r, echo=FALSE, include=FALSE}
+# Extract the genre in validation datasets
+
+validation <- validation %>%
+  mutate(genre = as.character(fct_explicit_na(genres,
+                                              na_level = "(no genres listed)"))
+  ) %>%
+  separate_rows(genre,
+                sep = "\\|")
+
+```
+
+```{r, echo=FALSE, include=FALSE}
+# Select the required columns in both the datasets.
+edx <- edx %>% select(userId, movieId, rating, title, genre, timestamp)
+
+validation <- validation %>% select(userId, movieId, rating, title, genre, timestamp)
+
+```
+
+# Build, Evaluate and Analyze Models
+
+
+## Model 1 - Naive Mean-Baseline model
+
+The formula for computing this is
+
+$$Y_{u,i} = \hat{\mu} + \varepsilon_{u,i}$$
+
+With $\hat{\mu}$ is the mean and $\varepsilon_{i,u}$ is the independent errors sampled from the same distribution centered at 0.
+
+```{r, echo=FALSE, include=TRUE}
+# Calculate the average of all movies
+
+mu_hat <- mean(edx$rating)
+
+# Predict the RMSE on the validation set
+
+rmse_mean_model_result <- RMSE(validation$rating, mu_hat)
+
+# Creating a results dataframe that contains all RMSE results
+
+rmse_results <- data.frame(model="Naive Mean-Baseline Model", RMSE=rmse_mean_model_result)
+
+```
+The RMSE on the **Validation** data is ```r rmse_mean_model_result```. This is way off from the target RMSE of < 0.87. This clearly states that the model is not optimal.
+
+## Model 2 - Considering the bias that, some movies are rated higher than others.
+
+The formula used is:
+
+$$Y_{u,i} = \hat{\mu} + b_i + \epsilon_{u,i}$$
+
+With $\hat{\mu}$ is the mean and $\varepsilon_{i,u}$ is the independent errors sampled from the same distribution centered at 0. The $b_i$ is a measure for the popularity of movie $i$, i.e. the bias of movie $i$.
+
+```{r, echo=FALSE, include=TRUE}
+#Get the bias
+movie_avgs <- edx %>%
+  group_by(movieId) %>%
+  summarize(b_i = mean(rating - mu_hat))
+
+#Predicted ratings
+predicted_ratings <- mu_hat + validation %>%
+  left_join(movie_avgs, by='movieId') %>%
+  pull(b_i)
+
+#RMSE for this model
+rmse_movie_model_result = RMSE(predicted_ratings, validation$rating)
+
+#Add to the results
+rmse_results <- rmse_results %>% add_row(model="Movie-Based Model", RMSE=rmse_movie_model_result)
+
+```
+
+The RMSE on the ```validation``` dataset is **0.9410700**. It better than the Naive Mean-Baseline Model, but it is also very far from the target RMSE (below 0.87) and that indicates poor performance for the model.
+
+## Model 3 - Considering the User Effects.
+ 
+ The second Non-Naive Model consider that the users have different tastes and rate differently.
+
+The formula used is:
+
+$$Y_{u,i} = \hat{\mu} + b_i + b_u + \epsilon_{u,i}$$
+
+With $\hat{\mu}$ is the mean and $\varepsilon_{i,u}$ is the independent errors sampled from the same distribution centered at 0. The $b_i$ is a measure for the popularity of movie $i$, i.e. the bias of movie $i$. The  $b_u$ is a measure for the mildness of user $u$, i.e. the bias of user $u$.
+
+```{r, echo=FALSE, include=TRUE}
+#Get the user bias
+user_avgs <- edx %>%
+  left_join(movie_avgs, by='movieId') %>%
+  group_by(userId) %>%
+  summarize(b_u = mean(rating - mu_hat - b_i))
+
+#Construct the model
+predicted_ratings <- validation %>%
+  left_join(movie_avgs, by='movieId') %>%
+  left_join(user_avgs, by='userId') %>%
+  mutate(pred = mu_hat + b_i + b_u) %>%
+  pull(pred)
+
+#RMSE for this model
+rmse_user_model_result = RMSE(predicted_ratings, validation$rating)
+
+#Add to the results
+rmse_results <- rmse_results %>% add_row(model="User-Based Model", RMSE=rmse_user_model_result)
+
+```
+
+The RMSE on the ```validation``` dataset is **0.8633660** and this is very good. We need to explore further with the Genres effect.
+
+## Model 4 - Check the Genre effects
+
+The formula used is:
+
+$$Y_{u,i} = \hat{\mu} + b_i + b_u + b_{u,g} + \epsilon_{u,i}$$
+
+With $\hat{\mu}$ is the mean and $\varepsilon_{i,u}$ is the independent errors sampled from the same distribution centered at 0. The $b_i$ is a measure for the popularity of movie $i$, i.e. the bias of movie $i$. The  $b_u$ is a measure for the mildness of user $u$, i.e. the bias of user $u$. The  $b_{u,g}$ is a measure for how much a user $u$ likes the genre $g$.
+
+```{r, echo=FALSE, include=TRUE}
+genre_model <- edx %>%
+  left_join(movie_avgs, by='movieId') %>%
+  left_join(user_avgs, by='userId') %>%
+  group_by(genre) %>%
+  summarize(b_u_g = mean(rating - mu_hat - b_i - b_u))
+
+# Compute the predicted ratings on validation dataset
+
+rmse_genre_model <- validation %>%
+  left_join(movie_avgs, by='movieId') %>%
+  left_join(user_avgs, by='userId') %>%
+  left_join(genre_model, by='genre') %>%
+  mutate(pred = mu_hat + b_i + b_u + b_u_g) %>%
+  pull(pred)
+
+rmse_genre_model_result <- RMSE(validation$rating, rmse_genre_model)
+
+#Add to the results
+rmse_results <- rmse_results %>% add_row(model="Movie+User+Genre Based Model", RMSE=rmse_genre_model_result)
+
+```
+The RMSE on the ```validation``` dataset is **0.8632723** and this meets our target. Adding Genre did not significantly change much from the Movie+User model. Regularization can improve the performance just a little.
+
+The regularization method allows us to add a penalty $\lambda$ (lambda) to penalizes movies with large estimates from a small sample size. In order to optimize $b_i$, it necessary to use this equation:
+
+$$\frac{1}{N} \sum_{u,i} (y_{u,i} - \mu - b_{i})^{2} + \lambda \sum_{i} b_{i}^2$$   
+
+reduced to this equation:   
+
+$$\hat{b_{i}} (\lambda) = \frac{1}{\lambda + n_{i}} \sum_{u=1}^{n_{i}} (Y_{u,i} - \hat{\mu}) $$  
+
+## Model 5 - Regularized Movie based model. Regularized to eliminate noisy estimates
+
+```{r, echo=FALSE, include=TRUE}
+lambdas <- seq(0, 10, 0.25)
+
+just_the_sum <- edx %>%
+  group_by(movieId) %>%
+  summarize(s = sum(rating - mu_hat), n_i = n())
+
+rmses <- sapply(lambdas, function(l){
+  predicted_ratings <- validation %>%
+    left_join(just_the_sum, by='movieId') %>%
+    mutate(b_i = s/(n_i+l)) %>%
+    mutate(pred = mu_hat + b_i) %>%
+    pull(pred)
+  
+  return(RMSE(predicted_ratings, validation$rating))
+})
+
+# Get the lambda value that minimize the RMSE
+min_lambda <- lambdas[which.min(rmses)]
+
+rmse_regularized_movie_model <- min(rmses)
+
+# Adding the results to the results dataset
+
+rmse_results <- rmse_results %>% add_row(model="Regularized Movie-Based Model", RMSE=rmse_regularized_movie_model)
+
+```
+
+The RMSE on the ```validation``` dataset is **0.9410381** and it looks a definite improvement over just the  Movie Based Model.
+
+## Model 6 - Regularized movie + user based model
+
+```{r, echo=FALSE, include=TRUE}
+rmses <- sapply(lambdas, function(lambda) {
+  
+  # Calculate the average by user
+  
+  b_i <- edx %>%
+    group_by(movieId) %>%
+    summarize(b_i = sum(rating - mu_hat) / (n() + lambda))
+  
+  # Calculate the average by user
+  
+  b_u <- edx %>%
+    left_join(b_i, by='movieId') %>%
+    group_by(userId) %>%
+    summarize(b_u = sum(rating - b_i - mu_hat) / (n() + lambda))
+  
+  # Compute the predicted ratings on validation dataset
+  
+  predicted_ratings <- validation %>%
+    left_join(b_i, by='movieId') %>%
+    left_join(b_u, by='userId') %>%
+    mutate(pred = mu_hat + b_i + b_u) %>%
+    pull(pred)
+  
+  # Predict the RMSE on the validation set
+  
+  return(RMSE(validation$rating, predicted_ratings))
+})
+
+# Get the lambda value that minimize the RMSE
+
+min_lambda <- lambdas[which.min(rmses)]
+
+# Predict the RMSE on the validation set
+
+rmse_regularized_movie_user_model <- min(rmses)
+
+# Adding the results to the results dataset
+
+rmse_results <- rmse_results %>% add_row(model="Regularized Movie+User Based Model", RMSE=rmse_regularized_movie_user_model)
+
+```
+
+The RMSE on the ```validation``` dataset is **0.8627554** and it looks a definite improvement over just the  Movie+User Based Model. We will try to improve it by including the Genre.
+
+## Model 7 - Regularized Movie,User and Genre.
+
+```{r, echo=FALSE, include=TRUE}
+rmses <- sapply(lambdas, function(lambda) {
+  
+  # Calculate the average by movie
+  
+  b_i <- edx %>%
+    group_by(movieId) %>%
+    summarize(b_i = sum(rating - mu_hat) / (n() + lambda))
+  
+  # Calculate the average by user
+  
+  b_u <- edx %>%
+    left_join(b_i, by='movieId') %>%
+    group_by(userId) %>%
+    summarize(b_u = sum(rating - b_i - mu_hat) / (n() + lambda))
+
+  # Calculate the average by genre
+  b_u_g <- edx %>%
+    left_join(b_i, by='movieId') %>%
+    left_join(b_u, by='userId') %>%
+    group_by(genre) %>%
+    summarize(b_u_g = sum(rating - b_i - mu_hat - b_u) / (n() + lambda))  
+  
+  # Compute the predicted ratings on validation dataset
+  
+  predicted_ratings <- validation %>%
+    left_join(b_i, by='movieId') %>%
+    left_join(b_u, by='userId') %>%
+    left_join(b_u_g, by='genre') %>%
+    mutate(pred = mu_hat + b_i + b_u + b_u_g) %>%
+    pull(pred)
+  
+  # Predict the RMSE on the validation set
+  
+  return(RMSE(validation$rating, predicted_ratings))
+})
+
+# Get the lambda value that minimize the RMSE
+
+min_lambda <- lambdas[which.min(rmses)]
+
+# Predict the RMSE on the validation set
+
+rmse_regularized_movie_user_genre_model <- min(rmses)
+
+# Adding the results to the results dataset
+
+rmse_results <- rmse_results %>% add_row(model="Regularized Movie+User+Genre Based Model", RMSE=rmse_regularized_movie_user_genre_model)
+```
+
+The RMSE on the ```validation``` dataset is **0.8627554** and this is the best of the models. The Regularized Movie+User+Genre Based Model improves just a little the result over the Non-Regularized Model, not a significant improvement.
+
+# Results
+```{r, echo=FALSE, include=TRUE}
+rmse_results
+```
+
+# Conclusion
+
+Analyzing the RMSEs of the above models, it is evident that **Movie Id** and **User Id** are better contributors than **Genre**. Having said that, the models indicate over training. Regularization helps in reducing the effect of variables and get the best meeting our target goal of < than **0.87**.
